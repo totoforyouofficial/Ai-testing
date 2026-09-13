@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shop Test Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .tab-btn.active { background-color: #4f46e5; color: white; }
+  .card { transition: transform 0.2s ease; }
+  .card:hover { transform: translateY(-2px); }
+  table th { position: sticky; top: 0; background-color: #f9fafb; z-index: 1; }
+  .table-wrap { max-height: 500px; overflow: auto; }
+  .loader { border: 3px solid #e5e7eb; border-top: 3px solid #4f46e5; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<header class="bg-white shadow-sm border-b border-gray-200">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-gray-900">🧪 Shop Test Lab</h1>
+      <p class="text-xs text-gray-500">Fake data • Safe testing</p>
+    </div>
+    <div id="status" class="text-xs text-gray-500">Connecting...</div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+  <section id="dashboard" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div class="card bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div class="text-xs text-gray-500 font-medium">Customers</div>
+      <div id="card-customers" class="text-2xl font-bold text-indigo-600 mt-1">—</div>
+    </div>
+    <div class="card bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div class="text-xs text-gray-500 font-medium">Total Sales</div>
+      <div id="card-sales" class="text-2xl font-bold text-green-600 mt-1">—</div>
+    </div>
+    <div class="card bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div class="text-xs text-gray-500 font-medium">Purchases</div>
+      <div id="card-purchases" class="text-2xl font-bold text-orange-600 mt-1">—</div>
+    </div>
+    <div class="card bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+      <div class="text-xs text-gray-500 font-medium">Expenses</div>
+      <div id="card-expenses" class="text-2xl font-bold text-red-600 mt-1">—</div>
+    </div>
+    <div class="card bg-white rounded-xl shadow-sm p-4 border border-gray-100 col-span-2 md:col-span-1">
+      <div class="text-xs text-gray-500 font-medium">Profit</div>
+      <div id="card-profit" class="text-2xl font-bold text-blue-700 mt-1">—</div>
+    </div>
+  </section>
+
+  <nav class="flex flex-wrap gap-2 mb-4">
+    <button class="tab-btn active px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="customers">Customers</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="products">Products</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="suppliers">Suppliers</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="invoices">Invoices</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="purchases">Purchases</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-700" data-tab="expenses">Expenses</button>
+  </nav>
+
+  <div class="mb-4">
+    <input id="searchInput" type="text" placeholder="Search..." class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-sm" />
+  </div>
+
+  <section class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div id="tableContainer" class="table-wrap"></div>
+  </section>
+  
+  <section id="ai-slot" class="mt-8"></section>
+</main>
+
+<script>
+// Initialize Supabase
+const SUPABASE_URL = "https://arvykxqolamslfmuibpe.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_MxA2DbmBuGsP0poGMmJF0A_ajbPe4DN";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentTab = "customers";
+let cache = {};
+const fmt = (n) => "₹" + Number(n || 0).toLocaleString("en-IN");
+
+function showStatus(msg, color = "text-gray-500") {
+  document.getElementById("status").textContent = msg;
+  document.getElementById("status").className = "text-xs " + color;
+}
+
+async function loadDashboard() {
+  const [cust, sales, purch, exp] = await Promise.all([
+    supabaseClient.from("customers").select("id", { count: "exact", head: true }),
+    supabaseClient.from("invoices").select("total_amount").eq("status", "paid"),
+    supabaseClient.from("purchases").select("total_cost"),
+    supabaseClient.from("expenses").select("amount"),
+  ]);
+
+  const totalCustomers = cust.count || 0;
+  const totalSales = (sales.data || []).reduce((s, r) => s + Number(r.total_amount), 0);
+  const totalPurchases = (purch.data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+  const totalExpenses = (exp.data || []).reduce((s, r) => s + Number(r.amount), 0);
+  const profit = totalSales - totalPurchases - totalExpenses;
+
+  document.getElementById("card-customers").textContent = totalCustomers;
+  document.getElementById("card-sales").textContent = fmt(totalSales);
+  document.getElementById("card-purchases").textContent = fmt(totalPurchases);
+  document.getElementById("card-expenses").textContent = fmt(totalExpenses);
+  
+  const profitEl = document.getElementById("card-profit");
+  profitEl.textContent = fmt(profit);
+  profitEl.className = "text-2xl font-bold mt-1 " + (profit >= 0 ? "text-blue-700" : "text-red-600");
+}
+
+async function loadTable(tab) {
+  const container = document.getElementById("tableContainer");
+  container.innerHTML = '<div class="p-8 flex justify-center"><div class="loader"></div></div>';
+
+  let query;
+  switch (tab) {
+    case "customers": query = supabaseClient.from("customers").select("*").order("id"); break;
+    case "products": query = supabaseClient.from("products").select("*").order("id"); break;
+    case "suppliers": query = supabaseClient.from("suppliers").select("*").order("id"); break;
+    case "invoices": query = supabaseClient.from("invoices").select("*").order("invoice_date", { ascending: false }); break;
+    case "purchases": query = supabaseClient.from("purchases").select("*").order("purchase_date", { ascending: false }); break;
+    case "expenses": query = supabaseClient.from("expenses").select("*").order("expense_date", { ascending: false }); break;
+  }
+
+  const { data, error } = await query;
+  
+  if (error) {
+    container.innerHTML = `<div class="p-6 bg-red-50 m-4 rounded"><p class="text-red-600 text-sm">Error: ${error.message}</p></div>`;
+    return;
+  }
+  
+  cache[tab] = data || [];
+  renderTable(tab, cache[tab]);
+}
+
+function renderTable(tab, rows) {
+  const container = document.getElementById("tableContainer");
+  
+  if (!rows || rows.length === 0) {
+    container.innerHTML = '<div class="p-6 text-center text-gray-500">No records</div>';
+    return;
+  }
+
+  const cols = Object.keys(rows[0]);
+  const html = `
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50">
+        <tr>${cols.map(c => `<th class="text-left px-3 py-2 font-semibold text-xs">${c}</th>`).join("")}</tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `<tr class="border-t">${cols.map(c => `<td class="px-3 py-2 text-xs">${r[c] !== null ? r[c] : ''}</td>`).join("")}</tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+  container.innerHTML = html;
+}
+
+// Search
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  const q = e.target.value.toLowerCase();
+  const rows = cache[currentTab] || [];
+  if (!q) { renderTable(currentTab, rows); return; }
+  
+  const filtered = rows.filter(r => 
+    Object.values(r).some(v => v && String(v).toLowerCase().includes(q))
+  );
+  renderTable(currentTab, filtered);
+});
+
+// Tabs
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentTab = btn.dataset.tab;
+    document.getElementById("searchInput").value = "";
+    loadTable(currentTab);
+  });
+});
+
+// Init
+(async function init() {
+  try {
+    showStatus("Loading...", "text-indigo-600");
+    await loadDashboard();
+    await loadTable("customers");
+    showStatus("✓ Connected", "text-green-600");
+  } catch (err) {
+    showStatus("✗ Error", "text-red-600");
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>
