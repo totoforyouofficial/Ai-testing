@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Test Lab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: -apple-system, sans-serif; }
+  .tab-btn.active { background-color: #4f46e5; color: white; }
+  .card { transition: transform 0.2s; }
+  .card:hover { transform: translateY(-2px); }
+  .loader { border: 3px solid #e5e7eb; border-top: 3px solid #4f46e5; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* AI Styles */
+  #ai-fab-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: #4f46e5; color: white; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #ai-chat-container { position: fixed; bottom: 90px; right: 15px; left: 15px; max-width: 380px; height: 450px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 9999; display: none; flex-direction: column; overflow: hidden; border: 1px solid #e5e7eb; }
+  #ai-chat-container.open { display: flex; }
+  .ai-header { background: #4f46e5; color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+  .ai-close { background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
+  #ai-messages { flex: 1; overflow-y: auto; background: #f9fafb; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .ai-msg { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+  .ai-msg-user { align-self: flex-end; background: #4f46e5; color: white; }
+  .ai-msg-bot { align-self: flex-start; background: #e5e7eb; color: #1f2937; }
+  .ai-input-area { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e5e7eb; background: white; }
+  #ai-input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 20px; outline: none; font-size: 14px; }
+  #ai-send { background: #4f46e5; color: white; border: none; border-radius: 20px; padding: 0 16px; font-weight: bold; cursor: pointer; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<header class="bg-white shadow-sm border-b">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-xl font-bold">🧪 Shop Test Lab</h1>
+      <p class="text-xs text-gray-500">Fake data • Safe testing</p>
+    </div>
+    <div id="status" class="text-xs text-gray-500">Connecting...</div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+  <!-- Dashboard -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+      <div class="text-xs text-gray-500">Customers</div>
+      <div id="card-customers" class="text-2xl font-bold text-indigo-600 mt-1">-</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+      <div class="text-xs text-gray-500">Total Sales</div>
+      <div id="card-sales" class="text-2xl font-bold text-green-600 mt-1">-</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+      <div class="text-xs text-gray-500">Purchases</div>
+      <div id="card-purchases" class="text-2xl font-bold text-orange-600 mt-1">-</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+      <div class="text-xs text-gray-500">Expenses</div>
+      <div id="card-expenses" class="text-2xl font-bold text-red-600 mt-1">-</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border">
+      <div class="text-xs text-gray-500">Profit</div>
+      <div id="card-profit" class="text-2xl font-bold text-blue-700 mt-1">-</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex flex-wrap gap-2 mb-4">
+    <button class="tab-btn active px-3 py-1.5 text-sm rounded-lg bg-gray-100" data-tab="customers">Customers</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100" data-tab="products">Products</button>
+    <button class="tab-btn px-3 py-1.5 text-sm rounded-lg bg-gray-100" data-tab="invoices">Invoices</button>
+  </div>
+
+  <input id="searchInput" type="text" placeholder="Search..." class="w-full px-4 py-2 rounded-lg border mb-4 text-sm">
+  <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div id="tableContainer" class="p-4 text-center text-gray-500">Loading...</div>
+  </div>
+</main>
+
+<!-- AI Chat UI -->
+<button id="ai-fab-btn"></button>
+<div id="ai-chat-container">
+  <div class="ai-header">
+    <span>Shop AI Assistant</span>
+    <button class="ai-close" id="ai-close-btn"></button>
+  </div>
+  <div id="ai-messages">
+    <div class="ai-msg ai-msg-bot">Hello! I am your AI assistant. How can I help you today?</div>
+  </div>
+  <div class="ai-input-area">
+    <input type="text" id="ai-input" placeholder="Ask a question..." autocomplete="off">
+    <button id="ai-send">Send</button>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // --- CONFIGURATION ---
+  const SUPABASE_URL = "https://arvykxqolamslfmuibpe.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_MxA2DbmBuGsP0poGMmJF0A_ajbPe4DN";
+  const API_KEY = "AQ.Ab8RN6L-ZQPkjChKFSC1scKBx-5XjQ0Cij8dFHksox0SeJnxsw";
+  const MODEL = "gemini-3.6-flash";
+  const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent?key=" + API_KEY;
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const fmt = (n) => "₹" + Number(n || 0).toLocaleString("en-IN");
+  let currentTab = "customers";
+  let cache = {};
+
+  // --- DASHBOARD & TABLES ---
+  function showStatus(msg, color = "text-gray-500") {
+    const el = document.getElementById("status");
+    el.textContent = msg;
+    el.className = "text-xs " + color;
+  }
+
+  async function loadDashboard() {
+    try {
+      const [cust, sales, purch, exp] = await Promise.all([
+        supabase.from("customers").select("id", { count: "exact", head: true }),
+        supabase.from("invoices").select("total_amount").eq("status", "paid"),
+        supabase.from("purchases").select("total_cost"),
+        supabase.from("expenses").select("amount")
+      ]);
+      const totalCustomers = cust.count || 0;
+      const totalSales = (sales.data || []).reduce((s, r) => s + Number(r.total_amount), 0);
+      const totalPurchases = (purch.data || []).reduce((s, r) => s + Number(r.total_cost), 0);
+      const totalExpenses = (exp.data || []).reduce((s, r) => s + Number(r.amount), 0);
+      const profit = totalSales - totalPurchases - totalExpenses;
+
+      document.getElementById("card-customers").textContent = totalCustomers;
+      document.getElementById("card-sales").textContent = fmt(totalSales);
+      document.getElementById("card-purchases").textContent = fmt(totalPurchases);
+      document.getElementById("card-expenses").textContent = fmt(totalExpenses);
+      
+      const profitEl = document.getElementById("card-profit");
+      profitEl.textContent = fmt(profit);
+      profitEl.className = "text-2xl font-bold mt-1 " + (profit >= 0 ? "text-blue-700" : "text-red-600");
+      showStatus("✓ Connected", "text-green-600");
+    } catch (err) {
+      showStatus("✗ Error", "text-red-600");
+    }
+  }
+
+  async function loadTable(tab) {
+    const container = document.getElementById("tableContainer");
+    container.innerHTML = '<div class="p-8 flex justify-center"><div class="loader"></div></div>';
+    const { data, error } = await supabase.from(tab).select("*").order("id").limit(50);
+    if (error) { container.innerHTML = `<div class="text-red-600 text-sm p-4">Error: ${error.message}</div>`; return; }
+    cache[tab] = data || [];
+    renderTable(tab, cache[tab]);
+  }
+
+  function renderTable(tab, rows) {
+    const container = document.getElementById("tableContainer");
+    if (!rows || rows.length === 0) { container.innerHTML = '<div class="p-6 text-center text-gray-500 text-sm">No records</div>'; return; }
+    const cols = Object.keys(rows[0]);
+    const html = `<table class="w-full text-sm">
+      <thead class="bg-gray-50"><tr>${cols.map(c => `<th class="text-left px-3 py-2 font-semibold text-xs">${c}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r => `<tr class="border-t">${cols.map(c => `<td class="px-3 py-2 text-xs">${r[c] !== null ? String(r[c]).substring(0,30) : ''}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>`;
+    container.innerHTML = html;
+  }
+
+  document.getElementById("searchInput").addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    const rows = cache[currentTab] || [];
+    if (!q) { renderTable(currentTab, rows); return; }
+    const filtered = rows.filter(r => Object.values(r).some(v => v && String(v).toLowerCase().includes(q)));
+    renderTable(currentTab, filtered);
+  });
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentTab = btn.dataset.tab;
+      document.getElementById("searchInput").value = "";
+      loadTable(currentTab);
+    });
+  });
+
+  // --- AI AGENT LOGIC ---
+  const fabBtn = document.getElementById('ai-fab-btn');
+  const chatContainer = document.getElementById('ai-chat-container');
+  const closeBtn = document.getElementById('ai-close-btn');
+  const messagesDiv = document.getElementById('ai-messages');
+  const inputField = document.getElementById('ai-input');
+  const sendBtn = document.getElementById('ai-send');
+
+  fabBtn.addEventListener('click', () => { chatContainer.classList.add('open'); inputField.focus(); });
+  closeBtn.addEventListener('click', () => chatContainer.classList.remove('open'));
+
+  function addMessage(text, type) {
+    const div = document.createElement('div');
+    div.className = 'ai-msg ai-msg-' + type;
+    div.textContent = text;
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    return div;
+  }
+
+  function getCardText(id) {
+    const el = document.getElementById(id);
+    return el ? el.textContent.trim() : 'Not available';
+  }
+
+  async function askAI(prompt) {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    const data = await response.json();
+    if (data.candidates && data.candidates.length > 0) return data.candidates[0].content.parts[0].text;
+    return "Sorry, I couldn't process that.";
+  }
+
+  async function runAction(actionCode) {
+    const parts = actionCode.split(':');
+    const action = parts[0];
+    const param = parts[1] || '';
+    try {
+      if (action === 'search_customer') {
+        const { data, error } = await supabase.from('customers').select('*').ilike('name', '%' + param + '%').limit(5);
+        if (error) return "Error: " + error.message;
+        if (!data || data.length === 0) return "No customers found matching '" + param + "'.";
+        return "Found " + data.length + " customers: " + JSON.stringify(data.map(c => c.name + ' (' + c.city + ')'));
+      }
+      if (action === 'search_product') {
+        const { data, error } = await supabase.from('products').select('*').ilike('name', '%' + param + '%').limit(5);
+        if (error) return "Error: " + error.message;
+        if (!data || data.length === 0) return "No products found.";
+        return "Found products: " + JSON.stringify(data.map(p => p.name + ' - ₹' + p.sell_price + ' (Stock: ' + p.stock + ')'));
+      }
+      if (action === 'get_pending_invoices') {
+        const { data, error } = await supabase.from('invoices').select('*').eq('status', 'pending').limit(5);
+        if (error) return "Error: " + error.message;
+        if (!data || data.length === 0) return "No pending invoices.";
+        return "Pending invoices: " + data.length + " invoices, Total: ₹" + data.reduce((s,r)=>s+Number(r.total_amount),0).toLocaleString('en-IN');
+      }
+      if (action === 'get_low_stock') {
+        const { data, error } = await supabase.from('products').select('*').lt('stock', 20).limit(5);
+        if (error) return "Error: " + error.message;
+        if (!data || data.length === 0) return "All products have good stock.";
+        return "Low stock items: " + JSON.stringify(data.map(p => p.name + ' (Stock: ' + p.stock + ')'));
+      }
+      return "Action not recognized.";
+    } catch (err) { return "Error: " + err.message; }
+  }
+
+  async function sendMessage() {
+    const text = inputField.value.trim();
+    if (!text) return;
+    addMessage(text, 'user');
+    inputField.value = '';
+    sendBtn.disabled = true; sendBtn.textContent = '...';
+    const loadingMsg = addMessage('Thinking...', 'bot');
+
+    const dashboardData = `Dashboard: Customers=${getCardText('card-customers')}, Sales=${getCardText('card-sales')}, Profit=${getCardText('card-profit')}`;
+    const systemPrompt = `You are a read-only shop assistant. ${dashboardData}. User asked: "${text}".
+    If they ask to find a customer, reply EXACTLY: ACTION:search_customer:[name]
+    If they ask to find a product, reply EXACTLY: ACTION:search_product:[name]
+    If they ask for pending invoices, reply EXACTLY: ACTION:get_pending_invoices
+    If they ask for low stock, reply EXACTLY: ACTION:get_low_stock
+    Otherwise, answer using the Dashboard data or politely.`;
+
+    try {
+      let reply = await askAI(systemPrompt);
+      if (reply.includes('ACTION:')) {
+        loadingMsg.textContent = 'Searching database...';
+        const actions = reply.split('\n').filter(line => line.startsWith('ACTION:'));
+        let results = [];
+        for (const line of actions) {
+          results.push(await runAction(line.replace('ACTION:', '').trim()));
+        }
+        const finalPrompt = `Database result: "${results.join(' | ')}". Summarize this nicely for the shop owner.`;
+        reply = await askAI(finalPrompt);
+      }
+      loadingMsg.textContent = reply;
+    } catch (error) { loadingMsg.textContent = "Error: " + error.message; } 
+    finally { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  inputField.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+  // --- INITIALIZE ---
+  loadDashboard();
+  loadTable("customers");
+});
+</script>
+</body>
+</html>
